@@ -95,23 +95,29 @@
       intel-mkl = mordrag-nixos.packages.${system}.intel-mkl;
       intel-dpcpp = mordrag-nixos.packages.${system}.intel-dpcpp;
       
-      # Our custom packages (to be implemented in Phase 3)
-      # comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {};
-      # ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {};
+      # Our custom packages
+      comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {};
+      
+      # ComfyUI custom nodes
+      comfyui-controlnet-aux = pkgs.callPackage ./packages/comfyui-nodes/controlnet-aux {};
+      comfyui-upscaling = pkgs.callPackage ./packages/comfyui-nodes/upscaling {};
+      
+      # Benchmarking and testing tools
+      ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {};
     };
 
     # NixOS modules
     nixosModules = {
       ipex = import ./modules/nixos/ipex.nix;
       ollama-ipex = import ./modules/nixos/ollama-ipex.nix;
-      # comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;  # Phase 3
+      comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;
     };
 
     # Home Manager modules  
     homeManagerModules = {
       ipex = import ./modules/home-manager/ipex.nix;
-      # ollama-ipex = import ./modules/home-manager/ollama-ipex.nix;  # Phase 2
-      # comfyui-ipex = import ./modules/home-manager/comfyui-ipex.nix;  # Phase 3
+      comfyui-ipex = import ./modules/home-manager/comfyui-ipex.nix;
+      # ollama-ipex = import ./modules/home-manager/ollama-ipex.nix;  # Phase 4
     };
 
     # Your existing NixOS configurations with IPEX integration
@@ -201,18 +207,27 @@
         # IPEX development
         intel-xpu.python
         
+        # ComfyUI development
+        comfyui-ipex
+        ipex-benchmarks
+        
         # Your existing tools
         anyrun.packages.${system}.anyrun
       ];
       
       shellHook = ''
         echo "IPEX Integration Development Environment"
-        echo "Current phase: $(git describe --tags --always 2>/dev/null || echo 'initial')"
+        echo "Current phase: $(git describe --tags --always 2>/dev/null || echo 'phase3-development')"
         echo ""
         echo "Available IPEX commands:"
-        echo "  nix build .#ollama-ipex      # Build Ollama with IPEX"
-        echo "  nix build .#python-ipex      # Build Intel Python environment"
-        echo "  nix flake check              # Validate flake"
+        echo "  nix build .#ollama-ipex         # Build Ollama with IPEX"
+        echo "  nix build .#python-ipex         # Build Intel Python environment"
+        echo "  nix build .#comfyui-ipex        # Build ComfyUI with IPEX"
+        echo "  nix flake check                 # Validate flake"
+        echo ""
+        echo "ComfyUI commands:"
+        echo "  comfyui-ipex --listen 0.0.0.0   # Start ComfyUI with Intel XPU"
+        echo "  ipex-benchmark                  # Run performance benchmarks"
         echo ""
         echo "Test IPEX installation:"
         echo "  python3 -c 'import intel_extension_for_pytorch as ipex; print(f\"IPEX {ipex.__version__} ready\")'"
