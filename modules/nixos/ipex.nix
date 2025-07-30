@@ -30,9 +30,6 @@ in
   
   config = mkIf cfg.enable {
     # Enable Intel GPU support
-    hardware.intel.gpu.enable = mkIf (elem "gpu" cfg.devices) true;
-    
-    # Add Intel GPU drivers and runtime libraries
     hardware.graphics = mkIf (elem "gpu" cfg.devices) {
       enable = true;
       extraPackages = with pkgs; [
@@ -63,8 +60,8 @@ in
     # Assertions for hardware requirements
     assertions = [
       {
-        assertion = cfg.autoDetectHardware -> config.hardware.intel.gpu.enable;
-        message = "Intel GPU hardware detection requires hardware.intel.gpu.enable = true";
+        assertion = cfg.autoDetectHardware -> config.hardware.graphics.enable;
+        message = "Intel GPU hardware detection requires hardware.graphics.enable = true";
       }
     ];
   };

@@ -2,7 +2,8 @@
   description = "IPEX Integration Project - Intel XPU acceleration for Ollama and ComfyUI";
 
   inputs = {
-    # Base inputs
+    # Base inputs - using unstable for latest Intel GPU drivers
+    # Note: Intel GPU support requires recent drivers (25.11+ when available)
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
     home-manager = {
@@ -172,18 +173,32 @@
       ipex-example = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
+          # Apply the Intel XPU overlay
+          { nixpkgs.overlays = [ (import ./overlays/intel-xpu.nix { inherit mordrag-nixos; }) ]; }
+          
           (import ./modules/nixos/ipex.nix)
-          (import ./modules/nixos/ollama-ipex.nix)
+          # (import ./modules/nixos/ollama-ipex.nix)  # Disabled due to Go 1.22 issue
           {
             # Basic configuration for IPEX testing
             boot.loader.systemd-boot.enable = true;
             boot.loader.efi.canTouchEfiVariables = true;
             
+            # Required filesystem configuration
+            fileSystems."/" = {
+              device = "/dev/disk/by-label/nixos";
+              fsType = "ext4";
+            };
+            
+            fileSystems."/boot" = {
+              device = "/dev/disk/by-label/boot";
+              fsType = "vfat";
+            };
+            
             networking.hostName = "ipex-example";
             
             # Enable IPEX services
             services.ipex.enable = true;
-            services.ollama-ipex.enable = true;
+            # services.ollama-ipex.enable = true;  # Disabled due to Go 1.22 issue
             
             users.users.user = {
               isNormalUser = true;
