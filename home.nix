@@ -14,21 +14,7 @@ let
   };
   in
   {
-  # Import IPEX Home Manager module
-  imports = [ 
-    # inputs.ags.homeManagerModules.default 
-    (import ./modules/home-manager/ipex.nix)
-  ];
-
-  # Enable IPEX development environment
-  programs.ipex = {
-    enable = true;
-    development = {
-      enable = true;
-      vscode = true;
-      jupyter = true;
-    };
-  };
+  # imports = [ inputs.ags.homeManagerModules.default ];
 
 #   programs.ags = {
 #     enable = true;
@@ -191,11 +177,6 @@ let
 
     # Development
     amazon-q-cli
-    
-    # IPEX and AI/ML tools
-    ollama-ipex  # Ollama with Intel XPU acceleration
-    # python-ipex is handled by programs.ipex module
-    
     # MicroTex Deps
     tinyxml-2
     gtkmm3

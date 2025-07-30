@@ -7,30 +7,10 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
-      
-      # IPEX modules
-      (import ./modules/nixos/ipex.nix)
-      (import ./modules/nixos/ollama-ipex.nix)
     ];
 
   # Enable Flakes.
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-  # IPEX Configuration
-  services.ipex = {
-    enable = true;
-    autoDetectHardware = true;
-    devices = [ "gpu" "cpu" ];
-    optimization = "performance";
-  };
-  
-  # Ollama with IPEX acceleration
-  services.ollama-ipex = {
-    enable = true;
-    host = "0.0.0.0";  # Allow network access
-    port = 11434;
-    acceleration = "auto";
-  };
 
   # Udev rules.
   hardware.uinput.enable = true;
@@ -178,6 +158,14 @@
     bibata-cursors
   ];
 
+  # ADD: Intel IPEX support for GPU workloads in KubeVirt VM
+  services.ipex = {
+    enable = true;
+    autoDetectHardware = true;
+    devices = [ "gpu" ];
+    optimization = "balanced";
+  };
+
   # Extra Groups
   users.groups.mlocate = {};
   users.groups.plocate = {};
@@ -237,6 +225,8 @@
 
     # System Tools.
     glxinfo
+    intel-gpu-tools  # ADD: Intel GPU monitoring
+    libva-utils      # ADD: Intel GPU capabilities
     blueman
     networkmanagerapplet
     nix-index
@@ -348,6 +338,10 @@
   (with pkgs; [
     nil
     foot
+    
+    # ADD: Intel IPEX packages for GPU workloads
+    comfyui-ipex      # ComfyUI with Intel XPU support
+    ipex-benchmarks   # Performance testing suite
     kitty
     pulseaudio
     xdg-desktop-portal-hyprland

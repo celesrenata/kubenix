@@ -1,105 +1,98 @@
 {
-  description = "IPEX Integration Project - Intel XPU acceleration for Ollama and ComfyUI";
+  description = "Intel IPEX Integration for NixOS with KubeVirt GPU Workloads";
 
   inputs = {
-    # Base inputs - using unstable for latest Intel GPU drivers
-    # Note: Intel GPU support requires recent drivers (25.11+ when available)
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.05";
-    home-manager = {
-      url = "github:nix-community/home-manager/master";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    
-    # MordragT's IPEX implementation
+    nixpkgs             = { url = "github:nixos/nixpkgs/nixos-unstable"; };
+    nixpkgs-unstable    = { url = "github:nixos/nixpkgs/nixos-unstable"; };
+    nixpkgs-stable      = { url = "github:nixos/nixpkgs/nixos-25.05"; };
+    home-manager        = { url = "github:nix-community/home-manager/master"; };
+    anyrun              = { url = "github:Kirottu/anyrun"; };
+    ags                 = { url = "github:Aylur/ags"; };
+    nixos-hardware      = { url = "github:NixOS/nixos-hardware/master"; };
+    dream2nix           = { url = "github:nix-community/dream2nix"; };
+    uniclip             = { url = "github:celesrenata/uniclip"; };
+    # Intel SR-IOV support - use as NixOS module
+    i915-sriov          = { url = "github:strongtz/i915-sriov-dkms"; };
+
+    # MordragT's Intel IPEX packages
     mordrag-nixos = {
       url = "github:MordragT/nixos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    
-    # Your existing inputs
-    anyrun.url = "github:Kirottu/anyrun";
-    ags.url = "github:Aylur/ags";
-    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-    dream2nix.url = "github:nix-community/dream2nix";
-    uniclip.url = "github:celesrenata/uniclip";
-    i915-sriov.url = "github:strongtz/i915-sriov-dkms";
+
+    # follow relationships
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs@{ 
-    nixpkgs, nixpkgs-stable, home-manager, mordrag-nixos,
-    anyrun, ags, nixos-hardware, dream2nix, uniclip, i915-sriov,
-    ...
-  }:
+  outputs = inputs@{ self, nixpkgs, nixpkgs-stable, nixpkgs-unstable, anyrun, home-manager, dream2nix, nixos-hardware, uniclip, i915-sriov, mordrag-nixos, ... }:
   let
     system = "x86_64-linux";
-    lib = nixpkgs.lib;
+    lib    = nixpkgs.lib;
 
-    # Your existing package sets
+    pkgs = import nixpkgs {
+      inherit system;
+      config.allowUnfree = true;
+    };
+
     pkgs-stable = import nixpkgs-stable {
       inherit system;
       config = {
-        allowUnfree = true;
+        allowUnfree               = true;
         permittedInsecurePackages = [
-          "python-2.7.18.7"
-          "openssl-1.1.1w"
+          "electron-25.9.0"
         ];
       };
     };
 
-    pkgs-unstable = import nixpkgs {
-      inherit system;
-      config.allowUnfree = true;
-      overlays = [
-        (import ./overlays/jetbrains-toolbox.nix)
-      ];
-    };
-
-    # Main package set with IPEX integration
-    pkgs = import nixpkgs {
+    pkgs-unstable = import nixpkgs-unstable {
       inherit system;
       config = {
-        allowUnfree = true;
-        allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "vscode" ];
-        allowUnsupportedSystem = true;
+        allowUnfree               = true;
+        permittedInsecurePackages = [
+          "electron-25.9.0"
+        ];
       };
-      overlays = [
-        # Your existing overlays
-        (import ./overlays/debugpy.nix)
-        (import ./overlays/materialyoucolor.nix)
-        (import ./overlays/end-4-dots.nix)
-        (import ./overlays/wofi-calc.nix)
-        (import ./overlays/kernel.nix)
-        (import ./overlays/intel-firmware.nix)
-        (import ./overlays/xrdp.nix)
-        (import ./overlays/xorgxrdp-glamor.nix)
-        
-        # IPEX overlay
-        (import ./overlays/intel-xpu.nix { inherit mordrag-nixos; })
-      ];
     };
   in
   {
-    # Package overlays
-    overlays = {
-      default = import ./overlays/intel-xpu.nix { inherit mordrag-nixos; };
-      intel-xpu = import ./overlays/intel-xpu.nix { inherit mordrag-nixos; };
+    # Intel XPU overlay for IPEX integration
+    overlays.intel-xpu = final: prev: {
+      intel-xpu = {
+        # Core IPEX components from MordragT
+        python = mordrag-nixos.packages.${final.system}.intel-python;
+        mkl = mordrag-nixos.packages.${final.system}.intel-mkl;
+        
+        # Our applications with Intel IPEX support
+        comfyui = final.comfyui-ipex;
+        # ollama = final.ollama-ipex;  # Disabled due to Go 1.22 issue
+      };
+      
+      # Direct access to our packages
+      comfyui-ipex = final.callPackage ./packages/comfyui-ipex {};
+      ipex-benchmarks = final.callPackage ./packages/benchmarks {};
     };
 
-    # Packages exposed by this flake
-    packages.${system} = {
-      # Direct access to MordragT's IPEX packages
-      ollama-ipex = mordrag-nixos.packages.${system}.ollama-sycl;
-      python-ipex = mordrag-nixos.packages.${system}.intel-python;
-      
-      # Intel base libraries
-      intel-mkl = mordrag-nixos.packages.${system}.intel-mkl;
-      intel-dpcpp = mordrag-nixos.packages.${system}.intel-dpcpp;
+    # NixOS modules for IPEX integration
+    nixosModules = {
+      ipex = import ./modules/nixos/ipex.nix;
+      comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;
+    };
+
+    # Home Manager modules
+    homeManagerModules = {
+      ipex = import ./modules/home-manager/ipex.nix;
+    };
+
+    # Package outputs
+    packages.x86_64-linux = {
+      # MordragT's packages (via overlay)
+      # ollama-ipex = mordrag-nixos.packages.x86_64-linux.ollama-sycl;  # Disabled
+      python-ipex = mordrag-nixos.packages.x86_64-linux.intel-python;
+      intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
+      intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
       
       # Our custom packages
       comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {};
-      
-      # ComfyUI custom nodes
       comfyui-controlnet-aux = pkgs.callPackage ./packages/comfyui-nodes/controlnet-aux {};
       comfyui-upscaling = pkgs.callPackage ./packages/comfyui-nodes/upscaling {};
       
@@ -107,152 +100,93 @@
       ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {};
     };
 
-    # NixOS modules
-    nixosModules = {
-      ipex = import ./modules/nixos/ipex.nix;
-      ollama-ipex = import ./modules/nixos/ollama-ipex.nix;
-      comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;
-    };
-
-    # Home Manager modules  
-    homeManagerModules = {
-      ipex = import ./modules/home-manager/ipex.nix;
-      comfyui-ipex = import ./modules/home-manager/comfyui-ipex.nix;
-      # ollama-ipex = import ./modules/home-manager/ollama-ipex.nix;  # Phase 4
-    };
-
-    # Your existing NixOS configurations with IPEX integration
+    # System configurations
     nixosConfigurations = {
-      # Your existing kubenix configuration with IPEX support
-      kubenix = nixpkgs.lib.nixosSystem {
+      # Original IPEX example system
+      ipex-example = lib.nixosSystem {
         inherit system;
-        pkgs = pkgs;
-        specialArgs = {
-          inherit inputs pkgs-stable pkgs-unstable;
-        };
+        specialArgs = { inherit pkgs-stable pkgs-unstable; };
         modules = [
-          # Your existing modules
-          ./configuration.nix
-          ./remote-build.nix
-          ./hardware-configuration.nix
-          ./kubenix/boot.nix
-          ./kubenix/remote-build.nix
-          ./kubenix/graphics.nix
-          ./kubenix/networking.nix
-          ./kubenix/virtualisation.nix
-          ./kubenix/xrdp-drm.nix
+          ./examples/ipex-example/configuration.nix
+          ./examples/ipex-example/hardware-configuration.nix
           
-          # Intel SR-IOV support
-          i915-sriov.nixosModules.default
+          # Apply Intel XPU overlay
+          { nixpkgs.overlays = [ self.overlays.intel-xpu ]; }
           
           # IPEX modules
-          (import ./modules/nixos/ipex.nix)
-          (import ./modules/nixos/ollama-ipex.nix)
+          self.nixosModules.ipex
+          self.nixosModules.comfyui-ipex
           
-          # Anyrun integration
-          {
-            environment.systemPackages = with pkgs; [
-              anyrun.packages.${system}.anyrun
-            ];
-          }
-          
-          # Home Manager with IPEX support
+          # Home Manager integration
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.extraSpecialArgs = {
-              inherit inputs pkgs-stable pkgs-unstable;
-            };
-            home-manager.users.celes = import ./home.nix;
+            home-manager.users.user = import ./examples/ipex-example/home.nix;
+            home-manager.extraSpecialArgs = { inherit pkgs-stable pkgs-unstable; };
           }
         ];
       };
-      
-      # IPEX-focused example configuration
-      ipex-example = nixpkgs.lib.nixosSystem {
+
+      # KubeVirt GPU workload VM with IPEX integration
+      kubenix = lib.nixosSystem {
         inherit system;
+        specialArgs = { inherit pkgs-stable pkgs-unstable; };
         modules = [
-          # Apply the Intel XPU overlay
-          { nixpkgs.overlays = [ (import ./overlays/intel-xpu.nix { inherit mordrag-nixos; }) ]; }
+          # Original kubenix system configuration
+          ./configuration.nix
+          ./hardware-configuration.nix
+          ./kubenix/boot.nix
+          ./kubenix/graphics.nix
+          ./kubenix/networking.nix
+          ./kubenix/kubernetes.nix
+          ./kubenix/virtualisation.nix
+          ./kubenix/iscsi.nix
+          ./kubenix/remote-build.nix
+          ./kubenix/xrdp-drm.nix
           
-          (import ./modules/nixos/ipex.nix)
-          # (import ./modules/nixos/ollama-ipex.nix)  # Disabled due to Go 1.22 issue
+          # ADD: Intel IPEX integration
+          { nixpkgs.overlays = [ self.overlays.intel-xpu ]; }
+          self.nixosModules.ipex
+          self.nixosModules.comfyui-ipex
+          
+          # Home Manager
+          home-manager.nixosModules.home-manager
           {
-            # Basic configuration for IPEX testing
-            boot.loader.systemd-boot.enable = true;
-            boot.loader.efi.canTouchEfiVariables = true;
-            
-            # Required filesystem configuration
-            fileSystems."/" = {
-              device = "/dev/disk/by-label/nixos";
-              fsType = "ext4";
-            };
-            
-            fileSystems."/boot" = {
-              device = "/dev/disk/by-label/boot";
-              fsType = "vfat";
-            };
-            
-            networking.hostName = "ipex-example";
-            
-            # Enable IPEX services
-            services.ipex.enable = true;
-            # services.ollama-ipex.enable = true;  # Disabled due to Go 1.22 issue
-            
-            # Add Intel GPU tools for debugging and monitoring
-            environment.systemPackages = with pkgs; [
-              intel-gpu-tools
-              libva-utils
-            ];
-            
-            users.users.user = {
-              isNormalUser = true;
-              extraGroups = [ "wheel" "render" "video" ];
-            };
-            
-            system.stateVersion = "24.05";
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.celes = import ./home.nix;
+            home-manager.extraSpecialArgs = { inherit pkgs-stable pkgs-unstable; };
           }
         ];
       };
     };
 
-    # Development shell
-    devShells.${system}.default = pkgs.mkShell {
+    # Development environments
+    devShells.x86_64-linux.default = pkgs.mkShell {
       buildInputs = with pkgs; [
         # Development tools
         git
-        nix-tree
-        nix-output-monitor
+        nix-prefetch-github
         
-        # IPEX development
-        intel-xpu.python
+        # Intel GPU tools
+        intel-gpu-tools
+        libva-utils
         
-        # ComfyUI development
-        comfyui-ipex
-        ipex-benchmarks
-        
-        # Your existing tools
-        anyrun.packages.${system}.anyrun
+        # Our packages for testing
+        self.packages.x86_64-linux.comfyui-ipex
+        self.packages.x86_64-linux.ipex-benchmarks
       ];
       
       shellHook = ''
-        echo "IPEX Integration Development Environment"
-        echo "Current phase: $(git describe --tags --always 2>/dev/null || echo 'phase3-development')"
+        echo "🚀 Intel IPEX Development Environment"
+        echo "Available packages:"
+        echo "  - comfyui-ipex: ComfyUI with Intel XPU support"
+        echo "  - ipex-benchmarks: Performance testing suite"
         echo ""
-        echo "Available IPEX commands:"
-        echo "  nix build .#ollama-ipex         # Build Ollama with IPEX"
-        echo "  nix build .#python-ipex         # Build Intel Python environment"
-        echo "  nix build .#comfyui-ipex        # Build ComfyUI with IPEX"
-        echo "  nix flake check                 # Validate flake"
-        echo ""
-        echo "ComfyUI commands:"
-        echo "  comfyui-ipex --listen 0.0.0.0   # Start ComfyUI with Intel XPU"
-        echo "  ipex-benchmark                  # Run performance benchmarks"
-        echo ""
-        echo "Test IPEX installation:"
-        echo "  python3 -c 'import intel_extension_for_pytorch as ipex; print(f\"IPEX {ipex.__version__} ready\")'"
-        echo ""
+        echo "Intel GPU tools:"
+        echo "  - intel_gpu_top: GPU monitoring"
+        echo "  - vainfo: GPU capabilities"
       '';
     };
   };
