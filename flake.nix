@@ -200,6 +200,12 @@
             services.ipex.enable = true;
             # services.ollama-ipex.enable = true;  # Disabled due to Go 1.22 issue
             
+            # Add Intel GPU tools for debugging and monitoring
+            environment.systemPackages = with pkgs; [
+              intel-gpu-tools
+              libva-utils
+            ];
+            
             users.users.user = {
               isNormalUser = true;
               extraGroups = [ "wheel" "render" "video" ];

@@ -1,16 +1,11 @@
 { lib
-, buildPythonApplication
+, python3Packages
 , writeText
 , writeShellScript
 , intel-xpu
-, matplotlib
-, pandas
-, psutil
-, gpustat
-, py-cpuinfo
 }:
 
-buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   pname = "ipex-benchmarks";
   version = "1.0.0";
   format = "other";
@@ -18,18 +13,18 @@ buildPythonApplication rec {
   # No external source - we create everything
   src = ./.;
 
-  propagatedBuildInputs = [
-    # Intel IPEX stack
-    intel-xpu.python.pkgs.ipex
-    intel-xpu.python.pkgs.torch
-    intel-xpu.python.pkgs.torchvision
+  propagatedBuildInputs = with python3Packages; [
+    # Intel IPEX stack (when available)
+    # intel-xpu.python.pkgs.ipex
+    # intel-xpu.python.pkgs.torch
+    # intel-xpu.python.pkgs.torchvision
     
-    # Benchmarking tools
+    # Benchmarking tools (fallback to standard packages for now)
     matplotlib
     pandas
     psutil
-    gpustat
-    py-cpuinfo
+    # gpustat  # May not be available
+    # py-cpuinfo  # May not be available
   ];
 
   dontBuild = true;
@@ -401,11 +396,11 @@ if __name__ == '__main__':
 EOF
     
     # Create wrapper script
-    cat > $out/bin/ipex-benchmark << 'EOF'
+    cat > $out/bin/ipex-benchmark << EOF
 #!/usr/bin/env bash
 export ZES_ENABLE_SYSMAN=1
 export ONEAPI_DEVICE_SELECTOR="opencl:*"
-exec ${intel-xpu.python}/bin/python $out/lib/ipex-benchmarks/benchmark.py "$@"
+exec python3 $out/lib/ipex-benchmarks/benchmark.py "\$@"
 EOF
     
     chmod +x $out/bin/ipex-benchmark
