@@ -1,0 +1,112 @@
+final: prev:
+let
+  xorgxrdp = prev.stdenv.mkDerivation rec {
+    pname = "xorgxrdp";
+    version = "0.10.4";
+
+    src = prev.fetchFromGitHub {
+      owner = "neutrinolabs";
+      repo = "xorgxrdp";
+      rev = "v${version}";
+      sha256 = "0y243h7mk9jy5yrdgngjkcr6rzq4116ip7pvc6vwz7yfnxxd9v2f";
+    };
+
+    nativeBuildInputs = with prev; [
+      pkg-config
+      autoconf
+      automake
+      which
+      libtool
+      nasm
+    ];
+
+    buildInputs = with prev; [
+      xorg.xorgserver.dev
+    ];
+
+    postPatch = ''
+      substituteInPlace configure.ac --replace "xorgxrdp_cv_cc_flag_-Wno-unused-but-set-variable=yes" "xorgxrdp_cv_cc_flag__Wno_unused_but_set_variable=yes"
+    '';
+
+    preConfigure = "./bootstrap";
+    configureFlags = [ "--enable-glamor" ];
+
+    enableParallelBuilding = true;
+
+    meta = with prev.lib; {
+      description = "Xorg drivers for xrdp";
+      homepage = "https://github.com/neutrinolabs/xorgxrdp";
+      license = licenses.mit;
+      maintainers = [ maintainers.volth ];
+      platforms = platforms.linux;
+    };
+  };
+
+in
+{
+  inherit xorgxrdp;
+
+  xrdp = prev.stdenv.mkDerivation rec {
+    pname = "xrdp";
+    version = "0.10.4.1";
+
+    src = prev.fetchFromGitHub {
+      owner = "neutrinolabs";
+      repo = "xrdp";
+      rev = "v${version}";
+      fetchSubmodules = true;
+      sha256 = "sha256-ula1B9/eriJ+0r6d9r2LAzh7J3s6/uvAiTKeRzLuVL0=";
+    };
+
+    nativeBuildInputs = with prev; [
+      pkg-config
+      autoconf
+      automake
+      which
+      libtool
+      nasm
+    ];
+
+    buildInputs = with prev; [
+      openssl
+      pam
+      xorg.libX11
+      xorg.libXfixes
+      xorg.libXrandr
+      libjpeg_turbo
+      fuse3
+    ];
+
+    postPatch = ''
+      substituteInPlace sesman/Makefile.am --replace "/etc/xrdp" "$out/etc/xrdp"
+    '';
+
+    preConfigure = "./bootstrap";
+
+    configureFlags = [
+      "--localstatedir=/var"
+      "--sysconfdir=/etc"
+      "--enable-fuse3"
+      "--enable-jpeg"
+      "--enable-rfxcodec"
+      "--enable-painter"
+    ];
+
+    installFlags = [ "sysconfdir=$(out)/etc" ];
+
+    postInstall = ''
+      # remove generated keys (they are regenerated on first startup)
+      rm $out/etc/xrdp/rsakeys.ini $out/etc/xrdp/cert.pem $out/etc/xrdp/key.pem
+    '';
+
+    enableParallelBuilding = true;
+
+    meta = with prev.lib; {
+      description = "An open source RDP server";
+      homepage = "https://github.com/neutrinolabs/xrdp";
+      license = licenses.asl20;
+      maintainers = [ maintainers.volth ];
+      platforms = platforms.linux;
+    };
+  };
+}

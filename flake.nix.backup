@@ -1,0 +1,101 @@
+{
+  description = "NixOS configuration";
+
+  inputs = {
+    nixpkgs             = { url = "github:nixos/nixpkgs/nixos-unstable"; };
+    nixpkgs-unstable    = { url = "github:nixos/nixpkgs/nixos-unstable"; };
+    nixpkgs-stable      = { url = "github:nixos/nixpkgs/nixos-25.05"; };
+    home-manager        = { url = "github:nix-community/home-manager/release-25.05"; };
+    anyrun              = { url = "github:Kirottu/anyrun"; };
+    ags                 = { url = "github:Aylur/ags"; };
+    nixos-hardware      = { url = "github:NixOS/nixos-hardware/master"; };
+    dream2nix           = { url = "github:nix-community/dream2nix"; };
+    uniclip             = { url = "github:celesrenata/uniclip"; };
+
+    # follow relationships
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = inputs@{ nixpkgs, nixpkgs-stable, nixpkgs-unstable, anyrun, home-manager, dream2nix, nixos-hardware, uniclip, ... }:
+  let
+    system = "x86_64-linux";
+    lib    = nixpkgs.lib;
+
+    pkgs-stable = import nixpkgs-stable {
+      inherit system;
+      config = {
+        allowUnfree               = true;
+        permittedInsecurePackages = [
+          "python-2.7.18.7"
+          "openssl-1.1.1w"
+        ];
+      };
+    };
+
+    pkgs-unstable = import nixpkgs-unstable {
+      inherit system;
+      config = {
+        allowUnfree = true;
+      };
+      overlays = [
+        (import ./overlays/jetbrains-toolbox.nix)
+      ];
+    };
+
+    pkgs = import nixpkgs {
+      inherit system;
+      config.allowUnfree          = true;
+      config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "vscode" ];
+      config.allowUnsupportedSystem = true;
+      overlays = [
+        (import ./overlays/debugpy.nix)
+        (import ./overlays/materialyoucolor.nix)
+        (import ./overlays/end-4-dots.nix)
+        (import ./overlays/wofi-calc.nix)
+        (import ./overlays/kernel.nix)
+        (import ./overlays/intel-gfx-sriov.nix)
+        (import ./overlays/intel-firmware.nix)
+        (import ./overlays/i915-sriov-dkms.nix)
+        (import ./overlays/xrdp.nix)
+        #(import ./overlays/xorgxrdp-glamor.nix)
+      ];
+    };
+  in {
+    nixosConfigurations = {
+      kubenix = nixpkgs.lib.nixosSystem {
+        system = system;
+        pkgs   = pkgs;
+        specialArgs = {
+          inherit inputs pkgs-stable pkgs-unstable;
+        };
+        modules = [
+          ./configuration.nix
+          ./hardware-configuration.nix
+    
+          ./kubenix/boot.nix
+          ./kubenix/graphics.nix
+          ./kubenix/networking.nix
+          ./kubenix/virtualisation.nix
+    
+          # inject your anyrun binary into systemPackages
+          {
+            environment.systemPackages = with pkgs; [
+              anyrun.packages.${system}.anyrun
+            ];
+          }
+          # Home Manager
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs    = true;
+            home-manager.useUserPackages  = true;
+            home-manager.extraSpecialArgs = {
+              inherit inputs pkgs-stable pkgs-unstable;
+            };
+            home-manager.users.celes = import ./home.nix;
+          }
+        ];
+      };
+    };
+  };
+}
+
