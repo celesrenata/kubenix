@@ -14,21 +14,7 @@ let
   };
   in
   {
-  # Import IPEX Home Manager module
-  imports = [ 
-    # inputs.ags.homeManagerModules.default 
-    (import ./modules/home-manager/ipex.nix)
-  ];
-
-  # Enable IPEX development environment
-  programs.ipex = {
-    enable = true;
-    development = {
-      enable = true;
-      vscode = true;
-      jupyter = true;
-    };
-  };
+  # imports = [ inputs.ags.homeManagerModules.default ];
 
 #   programs.ags = {
 #     enable = true;
@@ -191,11 +177,6 @@ let
 
     # Development
     amazon-q-cli
-    
-    # IPEX and AI/ML tools
-    ollama-ipex  # Ollama with Intel XPU acceleration
-    # python-ipex is handled by programs.ipex module
-    
     # MicroTex Deps
     tinyxml-2
     gtkmm3
@@ -374,7 +355,7 @@ let
       export PATH="$PATH:$HOME/bin:$HOME/.local/bin:$HOME/go/bin:"
     '';
 
-    # set some aliases, feel free to add more or remove some
+    # set some aliases, feel free to add more or remove some of them
     shellAliases = {
       k = "kubectl";
       urldecode = "python3 -c 'import sys, urllib.parse as ul; print(ul.unquote_plus(sys.stdin.read()))'";
@@ -405,4 +386,3 @@ let
   # Let home Manager install and manage itself.
   programs.home-manager.enable = true;
 }
-
