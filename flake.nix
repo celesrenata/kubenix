@@ -133,6 +133,24 @@
         inherit system;
         specialArgs = { inherit pkgs-stable pkgs-unstable; };
         modules = [
+          # Allow unfree packages for Intel GPU firmware
+          { 
+            nixpkgs.config.allowUnfree = true;
+            nixpkgs.config.permittedInsecurePackages = [
+              "openssl-1.1.1w"
+            ];
+          }
+          
+          # Add necessary overlays from original system
+          { nixpkgs.overlays = [ 
+            self.overlays.intel-xpu
+            (import ./overlays/intel-firmware.nix)
+            (import ./overlays/end-4-dots.nix)
+            (import ./overlays/wofi-calc.nix)
+            (import ./overlays/xrdp.nix)
+            (import ./overlays/xorgxrdp-glamor.nix)
+          ]; }
+          
           # Original kubenix system configuration
           ./configuration.nix
           ./hardware-configuration.nix
@@ -145,8 +163,10 @@
           ./kubenix/remote-build.nix
           ./kubenix/xrdp-drm.nix
           
+          # Intel SR-IOV support as NixOS module
+          i915-sriov.nixosModules.default
+          
           # ADD: Intel IPEX integration
-          { nixpkgs.overlays = [ self.overlays.intel-xpu ]; }
           self.nixosModules.ipex
           self.nixosModules.comfyui-ipex
           
@@ -156,7 +176,11 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.celes = import ./home.nix;
-            home-manager.extraSpecialArgs = { inherit pkgs-stable pkgs-unstable; };
+            home-manager.extraSpecialArgs = { 
+              inherit pkgs-stable pkgs-unstable; 
+              inherit inputs;
+              inherit system;
+            };
           }
         ];
       };

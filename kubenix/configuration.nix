@@ -18,6 +18,9 @@
 
   # Enable Flakes.
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  
+  # Allow unfree packages for Intel GPU firmware
+  nixpkgs.config.allowUnfree = true;
   nix.settings.cores = 8;
   nixpkgs.config.allowUnfree = true;
   nixpkgs.overlays = [

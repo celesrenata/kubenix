@@ -35,18 +35,20 @@ let
 
   # link all files in `./scripts` to `~/.config/i3/scripts`
 
-  home.file.".configstaging" = {
-    source = pkgs.end-4-dots;
-    recursive = true;   # link recursively
-    executable = true;  # make all files executable
-  };
+  # COMMENTED OUT: Missing package reference
+  # home.file.".configstaging" = {
+  #   source = pkgs.end-4-dots;
+  #   recursive = true;   # link recursively
+  #   executable = true;  # make all files executable
+  # };
   home.file."Backgrounds" = {
     source = celes-dots + "/Backgrounds";
     recursive = true;
   };
-  home.file.".local/bin/initialSetup.sh" = {
-    source = pkgs.end-4-dots + "/.local/bin/initialSetup.sh";
-  };
+  # COMMENTED OUT: Missing package reference
+  # home.file.".local/bin/initialSetup.sh" = {
+  #   source = pkgs.end-4-dots + "/.local/bin/initialSetup.sh";
+  # };
   home.file.".local/bin/agsAction.sh" = {
     source = celes-dots + "/.local/bin/agsAction.sh";
   };
@@ -56,9 +58,10 @@ let
   home.file.".local/bin/wofi-calc" = {
     source = wofi-calc + "/wofi-calc.sh";
   };
-  home.file.".config/hypr/hyprland.conf" = {
-    source = pkgs.end-4-dots + "/hypr/hyprland.conf";
-  };
+  # COMMENTED OUT: Missing package reference
+  # home.file.".config/hypr/hyprland.conf" = {
+  #   source = pkgs.end-4-dots + "/hypr/hyprland.conf";
+  # };
   
   # encode the file content in nix configuration file directly
   # home.file.".xxx".text = ''
