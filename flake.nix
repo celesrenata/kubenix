@@ -68,7 +68,9 @@
       };
       
       # Direct access to our packages
-      comfyui-ipex = final.callPackage ./packages/comfyui-ipex {};
+      comfyui-ipex = final.callPackage ./packages/comfyui-ipex {
+        inherit (final) ipex-llm intel-mkl intel-tbb intel-dpcpp;
+      };
       ollama-ipex = final.callPackage ./packages/ollama-ipex {};  # Add our fixed Ollama
       ipex-benchmarks = final.callPackage ./packages/benchmarks {};
       
@@ -104,7 +106,12 @@
       intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
       
       # Our custom packages
-      comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {};
+      comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {
+        ipex-llm = self.packages.x86_64-linux.ipex-llm;
+        intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
+        intel-tbb = mordrag-nixos.packages.x86_64-linux.intel-tbb;
+        intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
+      };
       ollama-ipex = pkgs.callPackage ./packages/ollama-ipex {};  # Fixed Ollama with Intel IPEX
       comfyui-controlnet-aux = pkgs.callPackage ./packages/comfyui-nodes/controlnet-aux {};
       comfyui-upscaling = pkgs.callPackage ./packages/comfyui-nodes/upscaling {};

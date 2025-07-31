@@ -1,17 +1,20 @@
 { lib
-, python312Packages  # Use Python 3.12 to match MordragT's IPEX packages
+, python3Packages  # Use Python 3.13 to match our IPEX-LLM package
 , fetchFromGitHub
-, intel-xpu ? null
+, ipex-llm  # Use our properly built IPEX-LLM package
 , makeWrapper
 , writeText
 , writeShellScript
+, intel-mkl
+, intel-tbb
+, intel-dpcpp
 }:
 
 let
   # ComfyUI version - ACTUAL latest from GitHub with built-in Intel XPU support!
   version = "0.3.47";
 
-in python312Packages.buildPythonApplication rec {
+in python3Packages.buildPythonApplication rec {
   pname = "comfyui-ipex";
   inherit version;
   format = "other";
@@ -27,7 +30,7 @@ in python312Packages.buildPythonApplication rec {
     makeWrapper
   ];
 
-  propagatedBuildInputs = with python312Packages; [
+  propagatedBuildInputs = with python3Packages; [
     # Core ComfyUI dependencies
     pillow
     pyyaml
@@ -45,13 +48,13 @@ in python312Packages.buildPythonApplication rec {
     transformers
     tokenizers
     
-    # Try to include PyTorch (may need Intel IPEX version)
-    # torch torchvision torchaudio
-  ] ++ lib.optionals (intel-xpu != null) [
-    # Intel IPEX stack when available - this enables the built-in Intel XPU support!
-    intel-xpu.python.pkgs.ipex
-    intel-xpu.python.pkgs.torch
-    intel-xpu.python.pkgs.torchvision
+    # PyTorch (standard version - IPEX-LLM will provide Intel optimizations)
+    torch
+    torchvision
+    torchaudio
+    
+    # Our properly built IPEX-LLM package for Intel acceleration
+    ipex-llm
   ];
 
   # No patches needed - ComfyUI v0.3.47 has Intel XPU support built-in!
@@ -70,23 +73,30 @@ in python312Packages.buildPythonApplication rec {
     # Copy ComfyUI source
     cp -r . $out/lib/comfyui/
     
-    # Create main wrapper script with Intel XPU support
+    # Create main wrapper script with Intel IPEX-LLM support
     mkdir -p $out/bin
     cat > $out/bin/comfyui-ipex << EOF
 #!/usr/bin/env bash
 
-# Intel XPU environment variables
+# Intel OneAPI environment variables
 export ZES_ENABLE_SYSMAN=1
 export ONEAPI_DEVICE_SELECTOR="opencl:*"
+export SYCL_CACHE_PERSISTENT=1
+export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
+
+# Intel library paths
+export MKLROOT="${intel-mkl.out}"
+export TBBROOT="${intel-tbb.out}"
+export DNNLROOT="${intel-dpcpp.llvm}"
 
 # ComfyUI configuration
 export COMFYUI_PATH="$out/lib/comfyui"
 
 # Usage information
 if [[ "\$1" == "--help-gpu" ]]; then
-    echo "ComfyUI v0.3.47 with built-in Intel XPU + NVIDIA CUDA support"
+    echo "ComfyUI v0.3.47 with Intel IPEX-LLM acceleration"
     echo ""
-    echo "🎉 GREAT NEWS: ComfyUI v0.3.47 has native Intel XPU support!"
+    echo "🎉 Using our properly built IPEX-LLM package from source!"
     echo ""
     echo "GPU Selection Options:"
     echo "  (default)                    - Auto-detect: Intel XPU > CUDA > CPU"
@@ -134,9 +144,11 @@ EOF
     # Create Intel XPU-optimized wrapper
     cat > $out/bin/comfyui-xpu << 'EOF'
 #!/usr/bin/env bash
-# Optimized Intel XPU usage
+# Optimized Intel XPU usage with our IPEX-LLM
 export ZES_ENABLE_SYSMAN=1
 export ONEAPI_DEVICE_SELECTOR="opencl:*"
+export SYCL_CACHE_PERSISTENT=1
+export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
 cd "$out/lib/comfyui"
 exec python3 main.py --oneapi-device-selector "opencl:*" "$@"
 EOF
@@ -149,6 +161,8 @@ EOF
 # Intel XPU with Level Zero driver
 export ZES_ENABLE_SYSMAN=1
 export ONEAPI_DEVICE_SELECTOR="level_zero:*"
+export SYCL_CACHE_PERSISTENT=1
+export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
 cd "$out/lib/comfyui"
 exec python3 main.py --oneapi-device-selector "level_zero:*" "$@"
 EOF
@@ -159,8 +173,8 @@ EOF
     mkdir -p $out/share/applications
     cat > $out/share/applications/comfyui-ipex.desktop << 'EOF'
 [Desktop Entry]
-Name=ComfyUI (Intel XPU + NVIDIA)
-Comment=Stable Diffusion GUI with native Intel XPU + NVIDIA CUDA support
+Name=ComfyUI (Intel IPEX-LLM)
+Comment=Stable Diffusion GUI with Intel IPEX-LLM acceleration
 Exec=comfyui-ipex --listen 0.0.0.0
 Icon=applications-graphics
 Terminal=false
@@ -171,44 +185,58 @@ EOF
     runHook postInstall
   '';
 
-  # Wrap the Python environment with Intel GPU support
+  # Wrap the Python environment with Intel GPU support and our IPEX-LLM
   postFixup = ''
+    # Source Intel OneAPI environment for all wrappers
+    for wrapper in $out/bin/comfyui-*; do
+      wrapProgram "$wrapper" \
+        --prefix PYTHONPATH : "$out/lib/comfyui:${ipex-llm}/${python3Packages.python.sitePackages}:$PYTHONPATH" \
+        --prefix PATH : "${intel-mkl.out}/bin:${intel-tbb.out}/bin:${intel-dpcpp.llvm}/bin" \
+        --set MKLROOT "${intel-mkl.out}" \
+        --set TBBROOT "${intel-tbb.out}" \
+        --set DNNLROOT "${intel-dpcpp.llvm}" \
+        --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ intel-mkl.out intel-tbb.out intel-dpcpp.llvm ]}"
+    done
+    
+    # Set Intel-specific environment for XPU wrappers
     wrapProgram $out/bin/comfyui-ipex \
-      --prefix PYTHONPATH : "$out/lib/comfyui:$PYTHONPATH" \
       --set ZES_ENABLE_SYSMAN "1" \
-      --set ONEAPI_DEVICE_SELECTOR "opencl:*"
-      
-    wrapProgram $out/bin/comfyui-cuda \
-      --prefix PYTHONPATH : "$out/lib/comfyui:$PYTHONPATH"
+      --set ONEAPI_DEVICE_SELECTOR "opencl:*" \
+      --set SYCL_CACHE_PERSISTENT "1" \
+      --set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS "1"
       
     wrapProgram $out/bin/comfyui-xpu \
-      --prefix PYTHONPATH : "$out/lib/comfyui:$PYTHONPATH" \
       --set ZES_ENABLE_SYSMAN "1" \
-      --set ONEAPI_DEVICE_SELECTOR "opencl:*"
+      --set ONEAPI_DEVICE_SELECTOR "opencl:*" \
+      --set SYCL_CACHE_PERSISTENT "1" \
+      --set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS "1"
       
     wrapProgram $out/bin/comfyui-xpu-l0 \
-      --prefix PYTHONPATH : "$out/lib/comfyui:$PYTHONPATH" \
       --set ZES_ENABLE_SYSMAN "1" \
-      --set ONEAPI_DEVICE_SELECTOR "level_zero:*"
+      --set ONEAPI_DEVICE_SELECTOR "level_zero:*" \
+      --set SYCL_CACHE_PERSISTENT "1" \
+      --set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS "1"
   '';
 
   meta = with lib; {
-    description = "ComfyUI v0.3.47 with native Intel XPU + NVIDIA CUDA support";
+    description = "ComfyUI v0.3.47 with Intel IPEX-LLM acceleration (built from source)";
     longDescription = ''
-      ComfyUI with built-in Intel XPU support (no patches needed!).
+      ComfyUI with Intel IPEX-LLM acceleration using our properly built package.
       
-      🎉 ComfyUI v0.3.47 includes native Intel XPU support with:
-      - Automatic Intel XPU device detection
-      - Intel IPEX optimizations built-in
-      - OneAPI device selector support
-      - Full NVIDIA CUDA compatibility preserved
+      🎉 Features:
+      - ComfyUI v0.3.47 with native Intel XPU support
+      - Intel IPEX-LLM package built from source (no binary copying!)
+      - Proper Intel OneAPI environment integration
+      - Multiple GPU backends: Intel XPU, NVIDIA CUDA, CPU
+      - Four optimized binaries for different use cases
       
-      Features:
-      - Four binaries: comfyui-ipex, comfyui-cuda, comfyui-xpu, comfyui-xpu-l0
-      - Automatic GPU detection: Intel XPU > CUDA > CPU
-      - Intel XPU optimizations with --oneapi-device-selector
-      - Level Zero and OpenCL driver support
-      - Full compatibility with existing CUDA workflows
+      Binaries:
+      - comfyui-ipex: Auto-detect best GPU with Intel IPEX-LLM
+      - comfyui-cuda: Force NVIDIA CUDA usage
+      - comfyui-xpu: Intel XPU optimized with OpenCL
+      - comfyui-xpu-l0: Intel XPU with Level Zero driver
+      
+      Built the Nix way: Pure, reproducible, from source! ✨
     '';
     homepage = "https://github.com/comfyanonymous/ComfyUI";
     license = licenses.gpl3Plus;
