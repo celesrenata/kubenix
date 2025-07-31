@@ -14,6 +14,7 @@
       ./networking.nix
       ./remote-build.nix
       ./virtualisation.nix
+      ./comfyui-service.nix  # Add ComfyUI with Intel IPEX acceleration
     ];
 
   # Enable Flakes.
@@ -21,6 +22,9 @@
   
   # Allow unfree packages for Intel GPU firmware
   nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.permittedInsecurePackages = [
+    "openssl-1.1.1w"  # Required for some dependencies
+  ];
   nix.settings.cores = 8;
   nixpkgs.config.allowUnfree = true;
   nixpkgs.overlays = [
