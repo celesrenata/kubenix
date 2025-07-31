@@ -64,12 +64,25 @@
         
         # Our applications with Intel IPEX support
         comfyui = final.comfyui-ipex;
-        # ollama = final.ollama-ipex;  # Disabled due to Go 1.22 issue
+        ollama = final.ollama-ipex;  # Now enabled with fixed Go version
       };
       
       # Direct access to our packages
       comfyui-ipex = final.callPackage ./packages/comfyui-ipex {};
+      ollama-ipex = final.callPackage ./packages/ollama-ipex {};  # Add our fixed Ollama
       ipex-benchmarks = final.callPackage ./packages/benchmarks {};
+      
+      # Add MordragT's Intel packages to system pkgs (prefer OneAPI versions)
+      intel-mkl = mordrag-nixos.packages.${final.system}.intel-mkl;
+      intel-tbb = mordrag-nixos.packages.${final.system}.intel-tbb;  # Use regular intel-tbb (has vars.sh)
+      intel-dpcpp = mordrag-nixos.packages.${final.system}.intel-dpcpp;
+      intel-dnnl = mordrag-nixos.packages.${final.system}.intel-dnnl;
+      intel-sycl = mordrag-nixos.packages.${final.system}.intel-sycl;
+      
+      # Our custom packages
+      ipex-llm = final.callPackage ./packages/ipex-llm.nix { 
+        inherit (final) intel-mkl intel-tbb intel-dpcpp intel-dnnl jemalloc gperftools;
+      };
     };
 
     # NixOS modules for IPEX integration
@@ -86,18 +99,28 @@
     # Package outputs
     packages.x86_64-linux = {
       # MordragT's packages (via overlay)
-      # ollama-ipex = mordrag-nixos.packages.x86_64-linux.ollama-sycl;  # Disabled
       python-ipex = mordrag-nixos.packages.x86_64-linux.intel-python;
       intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
       intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
       
       # Our custom packages
       comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {};
+      ollama-ipex = pkgs.callPackage ./packages/ollama-ipex {};  # Fixed Ollama with Intel IPEX
       comfyui-controlnet-aux = pkgs.callPackage ./packages/comfyui-nodes/controlnet-aux {};
       comfyui-upscaling = pkgs.callPackage ./packages/comfyui-nodes/upscaling {};
       
       # Benchmarking and testing tools
       ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {};
+      
+      # Intel IPEX-LLM (proper Nix derivation from source)
+      ipex-llm = pkgs.callPackage ./packages/ipex-llm.nix { 
+        intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
+        intel-tbb = mordrag-nixos.packages.x86_64-linux.intel-tbb;
+        intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
+        intel-dnnl = mordrag-nixos.packages.x86_64-linux.intel-dnnl;
+        jemalloc = pkgs.jemalloc;
+        gperftools = pkgs.gperftools;
+      };
     };
 
     # System configurations
@@ -136,28 +159,26 @@
           # Allow unfree packages for Intel GPU firmware
           { 
             nixpkgs.config.allowUnfree = true;
-            nixpkgs.config.permittedInsecurePackages = [
-              "openssl-1.1.1w"
-            ];
           }
           
           # Add necessary overlays from original system
           { nixpkgs.overlays = [ 
             self.overlays.intel-xpu
             (import ./overlays/intel-firmware.nix)
+            (import ./overlays/ollama-sycl-fix.nix)  # Fix MordragT's Ollama Go 1.22 issue
             (import ./overlays/end-4-dots.nix)
             (import ./overlays/wofi-calc.nix)
             (import ./overlays/xrdp.nix)
             (import ./overlays/xorgxrdp-glamor.nix)
           ]; }
           
-          # Original kubenix system configuration
+          # Original kubenix system configuration (without K3s)
           ./configuration.nix
           ./hardware-configuration.nix
           ./kubenix/boot.nix
           ./kubenix/graphics.nix
           ./kubenix/networking.nix
-          ./kubenix/kubernetes.nix
+          # ./kubenix/kubernetes.nix  # REMOVED: This VM is already IN a Kubernetes cluster!
           ./kubenix/virtualisation.nix
           ./kubenix/iscsi.nix
           ./kubenix/remote-build.nix

@@ -19,6 +19,106 @@
 
   services.automatic-timezoned.enable = true;
   location.provider = "geoclue2";
+  
+  # Create ollama user and group
+  users.users.ollama = {
+    isSystemUser = true;
+    group = "ollama";
+    home = "/var/lib/ollama";
+    createHome = true;
+    extraGroups = [ "render" ];  # Add to render group for Intel GPU access
+  };
+  users.groups.ollama = {};
+  
+  # Set proper permissions for ollama directory
+  systemd.tmpfiles.rules = [
+    "d /var/lib/ollama 0755 ollama ollama -"
+    "d /var/lib/ollama/.ollama 0755 ollama ollama -"
+    "d /var/lib/ollama/.ollama/models 0755 ollama ollama -"
+    "f /var/lib/ollama/.ollama/id_ed25519 0600 ollama ollama -"
+  ];
+
+  # Custom Ollama service with Intel OneAPI environment initialization
+  systemd.services.ollama = {
+    description = "Ollama with Intel IPEX support";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network.target" "systemd-tmpfiles-setup.service" ];
+    
+    environment = {
+      # Intel SYCL/IPEX environment variables
+      GGML_SYCL = "1";
+      GGML_SYCL_F16 = "1";
+      OLLAMA_INTEL_GPU = "1";
+      
+      # Intel OneAPI environment (from your Ubuntu script)
+      ZES_ENABLE_SYSMAN = "1";
+      SYCL_CACHE_PERSISTENT = "1";
+      SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS = "1";
+      ONEAPI_DEVICE_SELECTOR = "level_zero:0";
+      
+      # Level-Zero debug environment variables
+      ZE_DEBUG = "1";
+      ZES_DEBUG = "1";
+      ZE_ENABLE_VALIDATION_LAYER = "1";
+      SYCL_PI_TRACE = "2";
+      
+      # Critical: Intel OpenCL ICD file location (from intel-dpcpp.clang component)
+      OCL_ICD_FILENAMES = "${pkgs.intel-dpcpp.clang}/lib/libintelocl.so";
+      
+      # Intel OneAPI library paths (replicating setvars.sh)
+      MKLROOT = "${pkgs.intel-mkl.out}";
+      TBBROOT = "${pkgs.intel-tbb.out}";
+      DNNLROOT = "${pkgs.intel-dpcpp.llvm}";  # Using dpcpp as closest equivalent
+      
+      # Intel include paths
+      CPATH = "${pkgs.intel-mkl.out}/include:${pkgs.intel-dpcpp.llvm}/include";
+      C_INCLUDE_PATH = "${pkgs.intel-mkl.out}/include:${pkgs.intel-tbb.out}/include";
+      CPLUS_INCLUDE_PATH = "${pkgs.intel-mkl.out}/include:${pkgs.intel-tbb.out}/include:${pkgs.intel-dpcpp.llvm}/include";
+      
+      # Ollama configuration (from your working Ubuntu script)
+      OLLAMA_DEBUG = "1";
+      OLLAMA_KEEP_ALIVE = "5m";
+      OLLAMA_HOST = "0.0.0.0:11434";
+      OLLAMA_ORIGINS = "*";
+      OLLAMA_NUM_GPU = "999";
+      
+      # Set proper home directory
+      HOME = "/var/lib/ollama";
+      OLLAMA_MODELS = "/var/lib/ollama/.ollama/models";
+      
+      # Bypass CPU detection issues (let BigDL auto-detect backend)
+      # OLLAMA_LLM_LIBRARY = "oneapi";  # Commented out to let BigDL choose
+      OLLAMA_SKIP_CPU_CHECK = "1";
+    };
+    
+    serviceConfig = {
+      Type = "exec";
+      User = "ollama";
+      Group = "ollama";
+      ExecStart = pkgs.writeShellScript "ollama-with-ipex-env" ''
+        # Add required commands to PATH for Intel vars.sh scripts
+        export PATH="${pkgs.procps}/bin:${pkgs.gawk}/bin:$PATH"
+        
+        # Source Intel OneAPI environment scripts
+        source ${pkgs.intel-mkl.out}/env/vars.sh
+        source ${pkgs.intel-tbb.out}/env/vars.sh  
+        source ${pkgs.intel-dpcpp.llvm}/env/vars.sh
+        
+        # Make our properly built IPEX-LLM available
+        export PYTHONPATH="${pkgs.ipex-llm}/${pkgs.python3.sitePackages}:$PYTHONPATH"
+        
+        # Start standard Ollama with Intel IPEX environment
+        exec ${pkgs.ollama}/bin/ollama serve
+      '';
+      Restart = "always";
+      RestartSec = "3";
+      WorkingDirectory = "/var/lib/ollama";
+      StateDirectory = "ollama";
+    };
+  };
+  
+  # Open firewall for Ollama
+  networking.firewall.allowedTCPPorts = [ 11434 ];
   #time.timeZone = "America/Los_Angeles";
 
   # Select internationalisation properties.
@@ -227,6 +327,12 @@
     glxinfo
     intel-gpu-tools  # ADD: Intel GPU monitoring
     libva-utils      # ADD: Intel GPU capabilities
+    
+    # Intel GPU driver packages (from Ubuntu bootstrap script analysis)
+    intel-compute-runtime  # Intel OpenCL runtime (equivalent to intel-opencl-icd)
+    level-zero            # Level Zero GPU API
+    intel-gmmlib          # Intel Graphics Memory Management Library
+    
     blueman
     networkmanagerapplet
     nix-index
@@ -341,6 +447,7 @@
     
     # ADD: Intel IPEX packages for GPU workloads
     comfyui-ipex      # ComfyUI with Intel XPU support
+    ollama-sycl       # MordragT's Ollama with Intel SYCL (Go version fixed)
     ipex-benchmarks   # Performance testing suite
     kitty
     pulseaudio
