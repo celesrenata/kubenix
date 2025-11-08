@@ -33,12 +33,6 @@
     Option "DRI" "3"
   '';
 
-  # Enable render nodes for GPU acceleration
-  boot.kernelParams = [
-    "i915.enable_guc=2"
-    "i915.enable_fbc=1"
-  ];
-
   # Ensure render nodes are created
   services.udev.extraRules = ''
     SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="render", MODE="0664"

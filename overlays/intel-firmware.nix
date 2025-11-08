@@ -11,9 +11,14 @@ in
   linux-firmwareOverride = prev.linux-firmware.overrideAttrs (old: {
     installPhase = (old.installPhase or "") + ''
       mkdir -p $out/lib/firmware/i915
+      mkdir -p $out/lib/firmware/xe
       cp ${firmwareFiles}/firmware/mtl_guc_70.6.4.bin $out/lib/firmware/i915/mtl_guc_70.6.4.bin
       cp ${firmwareFiles}/firmware/mtl_huc_8.4.3_gsc.bin $out/lib/firmware/i915/mtl_huc_8.4.3_gsc.bin
       cp ${firmwareFiles}/firmware/mtl_gsc_102.0.0.1511.bin $out/lib/firmware/i915/mtl_gsc_102.0.0.1511.bin
+      # Also copy for xe driver
+      cp ${firmwareFiles}/firmware/mtl_guc_70.6.4.bin $out/lib/firmware/xe/mtl_guc_70.6.4.bin
+      cp ${firmwareFiles}/firmware/mtl_huc_8.4.3_gsc.bin $out/lib/firmware/xe/mtl_huc_8.4.3_gsc.bin
+      cp ${firmwareFiles}/firmware/mtl_gsc_102.0.0.1511.bin $out/lib/firmware/xe/mtl_gsc_102.0.0.1511.bin
     '';
   });
 }

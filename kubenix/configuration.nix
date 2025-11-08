@@ -28,7 +28,6 @@
   nix.settings.cores = 8;
   nixpkgs.config.allowUnfree = true;
   nixpkgs.overlays = [
-    (import ./overlays/i915-sriov-dkms.nix)
     (import ./overlays/intel-firmware.nix)
     (import ./overlays/intel-gfx-sriov.nix)
     (import ./overlays/kernel-6.6.nix)

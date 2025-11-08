@@ -11,8 +11,6 @@
     nixos-hardware      = { url = "github:NixOS/nixos-hardware/master"; };
     dream2nix           = { url = "github:nix-community/dream2nix"; };
     uniclip             = { url = "github:celesrenata/uniclip"; };
-    # Intel SR-IOV support - use as NixOS module
-    i915-sriov          = { url = "github:strongtz/i915-sriov-dkms"; };
 
     # MordragT's Intel IPEX packages
     mordrag-nixos = {
@@ -24,7 +22,7 @@
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs@{ self, nixpkgs, nixpkgs-stable, nixpkgs-unstable, anyrun, home-manager, dream2nix, nixos-hardware, uniclip, i915-sriov, mordrag-nixos, ... }:
+  outputs = inputs@{ self, nixpkgs, nixpkgs-stable, nixpkgs-unstable, anyrun, home-manager, dream2nix, nixos-hardware, uniclip, mordrag-nixos, ... }:
   let
     system = "x86_64-linux";
     lib    = nixpkgs.lib;
@@ -57,6 +55,9 @@
   {
     # Intel XPU overlay for IPEX integration
     overlays.intel-xpu = final: prev: {
+      # Kernel 6.18rc4 with native xe SR-IOV support
+      inherit (import ./overlays/kernel.nix final prev) linux_6_18_rc4 linuxPackages_6_18_rc4;
+      
       intel-xpu = {
         # Core IPEX components from MordragT
         python = mordrag-nixos.packages.${final.system}.intel-python;
@@ -91,6 +92,7 @@
     nixosModules = {
       ipex = import ./modules/nixos/ipex.nix;
       comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;
+      xe-sriov = import ./modules/nixos/xe-sriov.nix;
     };
 
     # Home Manager modules
@@ -100,10 +102,9 @@
 
     # Package outputs
     packages.x86_64-linux = {
-      # MordragT's packages (via overlay)
+      # MordragT's packages (via overlay) - only working ones
       python-ipex = mordrag-nixos.packages.x86_64-linux.intel-python;
       intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
-      intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
       
       # Our custom packages
       comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {
@@ -112,12 +113,14 @@
         intel-tbb = mordrag-nixos.packages.x86_64-linux.intel-tbb;
         intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
       };
-      ollama-ipex = pkgs.callPackage ./packages/ollama-ipex {};  # Fixed Ollama with Intel IPEX
-      comfyui-controlnet-aux = pkgs.callPackage ./packages/comfyui-nodes/controlnet-aux {};
-      comfyui-upscaling = pkgs.callPackage ./packages/comfyui-nodes/upscaling {};
+      ollama-ipex = pkgs.callPackage ./packages/ollama-ipex {};
+      # comfyui-controlnet-aux = pkgs.python3Packages.callPackage ./packages/comfyui-nodes/controlnet-aux {};
+      # comfyui-upscaling = pkgs.python3Packages.callPackage ./packages/comfyui-nodes/upscaling {};
       
       # Benchmarking and testing tools
-      ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {};
+      ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {
+        intel-xpu = pkgs.intel-xpu;
+      };
       
       # Intel IPEX-LLM (proper Nix derivation from source)
       ipex-llm = pkgs.callPackage ./packages/ipex-llm.nix { 
@@ -132,32 +135,6 @@
 
     # System configurations
     nixosConfigurations = {
-      # Original IPEX example system
-      ipex-example = lib.nixosSystem {
-        inherit system;
-        specialArgs = { inherit pkgs-stable pkgs-unstable; };
-        modules = [
-          ./examples/ipex-example/configuration.nix
-          ./examples/ipex-example/hardware-configuration.nix
-          
-          # Apply Intel XPU overlay
-          { nixpkgs.overlays = [ self.overlays.intel-xpu ]; }
-          
-          # IPEX modules
-          self.nixosModules.ipex
-          self.nixosModules.comfyui-ipex
-          
-          # Home Manager integration
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.users.user = import ./examples/ipex-example/home.nix;
-            home-manager.extraSpecialArgs = { inherit pkgs-stable pkgs-unstable; };
-          }
-        ];
-      };
-
       # KubeVirt GPU workload VM with IPEX integration
       kubenix = lib.nixosSystem {
         inherit system;
@@ -166,10 +143,14 @@
           # Allow unfree packages for Intel GPU firmware
           { 
             nixpkgs.config.allowUnfree = true;
+            nixpkgs.config.permittedInsecurePackages = [
+              "openssl-1.1.1w"
+            ];
           }
           
-          # Add necessary overlays from original system
+          # Add necessary overlays including kernel overlay
           { nixpkgs.overlays = [ 
+            (import ./overlays/kernel.nix)  # Kernel 6.18rc4 overlay
             self.overlays.intel-xpu
             (import ./overlays/intel-firmware.nix)
             (import ./overlays/ollama-sycl-fix.nix)  # Fix MordragT's Ollama Go 1.22 issue
@@ -191,8 +172,8 @@
           ./kubenix/remote-build.nix
           ./kubenix/xrdp-drm.nix
           
-          # Intel SR-IOV support as NixOS module
-          i915-sriov.nixosModules.default
+          # Native xe SR-IOV support (replaces i915-sriov experimental driver)
+          self.nixosModules.xe-sriov
           
           # ADD: Intel IPEX integration
           self.nixosModules.ipex

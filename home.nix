@@ -205,7 +205,7 @@ let
     yad
     ydotool
     gobject-introspection
-    wrapGAppsHook
+    wrapGAppsHook3
 
     # QT
     libsForQt5.qwt
@@ -260,7 +260,7 @@ let
     #dart-sass
     eza
     gojq
-    gradience
+    #gradience
     hypridle
     hyprlock
     hyprpicker

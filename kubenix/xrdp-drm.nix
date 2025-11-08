@@ -84,8 +84,9 @@
             Identifier "Video Card (xrdpdev)"
             Driver "xrdpdev"
             Option "DRMDevice" "/dev/dri/renderD128"
+            Option "AccelMethod" "glamor"
             Option "DRI3" "1"
-            Option "DRMAllowList" "amdgpu i915 msm radeon"
+            Option "DRMAllowList" "amdgpu i915 msm radeon xe"
         EndSection
 
         Section "Screen"

@@ -9,7 +9,7 @@ in
   # Override the regular xorgxrdp package with glamor support and Intel Arc config
   xorgxrdp = prev.stdenv.mkDerivation {
     pname = "xorgxrdp";
-    version = "v0.10.4-intel-arc-glamor"; # Use latest 0.10.4 version
+    version = "v0.10.4-intel-arc-glamor-xe"; # Use latest 0.10.4 version
     src = prev.fetchFromGitHub {
       owner = "neutrinolabs";
       repo = "xorgxrdp";
@@ -127,7 +127,7 @@ Section "Device"
     Driver "xrdpdev"
     Option "DRMDevice" "/dev/dri/renderD128"
     Option "DRI3" "1"
-    Option "DRMAllowList" "amdgpu i915 msm radeon"
+    Option "DRMAllowList" "amdgpu i915 msm radeon xe"
 EndSection
 
 Section "Screen"

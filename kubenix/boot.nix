@@ -14,24 +14,21 @@
     };
   };
   # KMS Module loading
-  boot.initrd.kernelModules = [ "vmd" "md_mod" "raid0" "i915" ];
+  boot.initrd.kernelModules = [ "vmd" "md_mod" "raid0" "xe" ];
   
-  # Update to modern kernel 6.15
-  boot.kernelPackages = pkgs.linuxPackages_6_15;
-  boot.kernelModules = [ "i915" "vfio" "vfio_pci" "vfio_iommu_type1" ];
-  boot.supportedFilesystems = [ "nfs" ];
-  boot.blacklistedKernelModules = [ "xe" ]; 
+  # Use kernel 6.18-rc4 from overlay
+  boot.kernelPackages = pkgs.linuxPackages_6_18_rc4;
+  boot.kernelModules = [ "xe" "vfio" "vfio_pci" "vfio_iommu_type1" ];
+  boot.supportedFilesystems = [ "nfs" ]; 
 
-  # Setup SR-IOV Required Parameters for Arc iGPU - same as gremlin-1
+  # Setup parameters for Arc iGPU VF - i915 driver (better VF support)
   boot.kernelParams = [
     "intel_iommu=on"
     "iommu=pt"
-    "i915.enable_guc=3"
-    "i915.force_probe=7d55"
     "boot.shell_on_fail"
   ];
   
-  # Modern SR-IOV Module for guest system
-  boot.extraModulePackages = [ pkgs.i915-sriov ];
-  boot.initrd.availableKernelModules = [ "i915" ];
+  # Native xe SR-IOV support - no extra module packages needed
+  # boot.extraModulePackages = [ pkgs.i915-sriov ];  # Removed - using native xe driver
+  boot.initrd.availableKernelModules = [ "xe" ];
 }

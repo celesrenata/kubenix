@@ -243,7 +243,7 @@
   fonts.packages = with pkgs-unstable; [
     noto-fonts
     noto-fonts-cjk-sans
-    noto-fonts-emoji
+    noto-fonts-color-emoji
     liberation_ttf
     fira-code
     fira-code-symbols
@@ -327,6 +327,7 @@
     glxinfo
     intel-gpu-tools  # ADD: Intel GPU monitoring
     libva-utils      # ADD: Intel GPU capabilities
+    nvtopPackages.intel  # GPU monitoring tool with Intel support
     
     # Intel GPU driver packages (from Ubuntu bootstrap script analysis)
     intel-compute-runtime  # Intel OpenCL runtime (equivalent to intel-opencl-icd)
