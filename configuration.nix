@@ -467,6 +467,19 @@
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
 
+  # Steam
+  programs.steam = {
+    enable = true;
+    extraPackages = with pkgs; [
+      glxinfo qt6.qtwayland nss xorg.libxkbfile
+      kdePackages.qtwayland libsForQt5.qt5.qtwayland
+      mangohud gamemode
+    ];
+    remotePlay.openFirewall = true;
+    dedicatedServer.openFirewall = true;
+  };
+  hardware.steam-hardware.enable = true;
+
   # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
   system.stateVersion = "24.11"; # Did you read the comment?
 }
