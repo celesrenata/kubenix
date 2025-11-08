@@ -324,7 +324,7 @@
     alsa-utils
 
     # System Tools.
-    glxinfo
+    mesa-demos
     intel-gpu-tools  # ADD: Intel GPU monitoring
     libva-utils      # ADD: Intel GPU capabilities
     nvtopPackages.intel  # GPU monitoring tool with Intel support
@@ -471,7 +471,7 @@
   programs.steam = {
     enable = true;
     extraPackages = with pkgs; [
-      glxinfo qt6.qtwayland nss xorg.libxkbfile
+      mesa-demos qt6.qtwayland nss xorg.libxkbfile
       kdePackages.qtwayland libsForQt5.qt5.qtwayland
       mangohud gamemode
     ];
