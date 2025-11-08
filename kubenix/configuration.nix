@@ -115,6 +115,24 @@
     isNormalUser = true;
   };
 
+
+  # Steam
+  programs.steam = {
+    enable = true;
+    extraPackages = with pkgs; [
+      glxinfo
+      qt6.qtwayland
+      nss
+      xorg.libxkbfile
+      kdePackages.qtwayland
+      libsForQt5.qt5.qtwayland
+      mangohud
+      gamemode
+    ];
+    remotePlay.openFirewall = true;
+    dedicatedServer.openFirewall = true;
+  };
+  hardware.steam-hardware.enable = true;
+
   system.stateVersion = "24.11";
 }
-
