@@ -1,31 +1,18 @@
 { lib
 , buildGoModule
 , fetchFromGitHub
-, fetchpatch
 , cmake
 , gcc14
-, ninja
 , pkg-config
-, stdenv
-, darwin
-, autoAddDriverRunpath
-, cudaPackages ? { }
-, rocmPackages ? { }
-, config
-, nixosTests
-, testers
-, ollama
-, ollama-rocm
-, ollama-cuda
-# Intel IPEX/SYCL support
+, git
 , intel-compute-runtime
 , level-zero
-, intel-mkl ? null
-, intel-dpcpp ? null
+, intel-mkl
+, opencl-headers
+, ocl-icd
 }:
 
-let
-  # Use the same source as MordragT but with updated Go builder
+buildGoModule rec {
   pname = "ollama-ipex";
   version = "0.5.4";
   
@@ -33,141 +20,47 @@ let
     owner = "ollama";
     repo = "ollama";
     rev = "v${version}";
-    hash = "sha256-YzEeJa8BjKDFbwKoJT/z8QXcJyoYx2WrOGt6/Bgj5Gs=";
-    fetchSubmodules = true;
+    hash = "sha256-JyP7A1+u9Vs6ynOKDwun1qLBsjN+CVHIv39Hh2TYa2U=";
   };
 
-  # Intel SYCL/IPEX specific build configuration
-  llamacppSycl = stdenv.mkDerivation {
-    name = "llamacpp-sycl";
-    inherit src;
-    
-    nativeBuildInputs = [
-      cmake
-      ninja
-      pkg-config
-    ] ++ lib.optionals (intel-dpcpp != null) [ intel-dpcpp ];
-    
-    buildInputs = [
-      intel-compute-runtime
-      level-zero
-      intel-mkl
-    ];
-    
-    cmakeFlags = [
-      "-DGGML_SYCL=ON"
-      "-DGGML_SYCL_F16=ON"
-      "-DCMAKE_C_COMPILER=icx"
-      "-DCMAKE_CXX_COMPILER=icpx"
-    ];
-    
-    buildPhase = ''
-      cd llama.cpp
-      cmake -B build -S . $cmakeFlags
-      cmake --build build --parallel $NIX_BUILD_CORES
-    '';
-    
-    installPhase = ''
-      mkdir -p $out/lib
-      cp build/src/libggml*.so* $out/lib/ || true
-      cp build/src/libllama*.so* $out/lib/ || true
-      cp build/examples/server/llama-server $out/bin/llama-server || true
-    '';
-  };
+  vendorHash = "sha256-xz9v91Im6xTLPzmYoVecdF7XiPKBZk3qou1SGokgPXQ=";
 
-in buildGoModule rec {
-  inherit pname version src;
-
-  vendorHash = "sha256-r8c3ZCFZ8xJNKCHB1FqPJhgMqjLdFD8lWKqHlNyGKjY=";
-
-  nativeBuildInputs = [
-    cmake
-    gcc14
-    ninja
-    pkg-config
-  ] ++ lib.optionals stdenv.isDarwin [
-    darwin.cctools
-  ];
-
-  buildInputs = [
-    intel-compute-runtime
-    level-zero
-    intel-mkl
-  ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk_11_0.frameworks; [
-    Accelerate
-    MetalPerformanceShaders
-    MetalKit
-  ]);
-
-  postPatch = ''
-    # Replace llamacpp build with our Intel SYCL version
-    substituteInPlace llm/generate/gen_common.sh \
-      --replace-fail 'git submodule update --init' 'echo "Skipping submodule update"'
-  '';
+  nativeBuildInputs = [ cmake gcc14 pkg-config git ];
+  buildInputs = [ intel-compute-runtime level-zero intel-mkl opencl-headers ocl-icd ];
 
   preBuild = ''
-    # Set up Intel SYCL environment
-    export GGML_SYCL=1
-    export GGML_SYCL_F16=1
+    # Use Intel MKL + OpenCL for GPU acceleration
+    export GGML_OPENCL=1
+    export GGML_BLAS=1
+    export GGML_BLAS_VENDOR=Intel10_64lp
+    export CGO_ENABLED=1
     
-    # Copy our pre-built llamacpp with SYCL support
-    mkdir -p llm/build/linux-amd64-sycl/
-    cp -r ${llamacppSycl}/lib/* llm/build/linux-amd64-sycl/ || true
+    # Intel MKL paths
+    export MKLROOT="${intel-mkl}"
+    export MKL_ROOT="${intel-mkl}"
+    export LD_LIBRARY_PATH="${intel-mkl}/lib:${intel-compute-runtime}/lib:${ocl-icd}/lib:$LD_LIBRARY_PATH"
+    
+    # OpenCL paths
+    export OPENCL_INCLUDE_DIR="${opencl-headers}/include"
+    export OPENCL_LIB_DIR="${ocl-icd}/lib"
   '';
 
   buildPhase = ''
     runHook preBuild
-    
-    # Build Ollama with Intel SYCL support
-    export CGO_ENABLED=1
-    export GOARCH=amd64
-    export GOOS=linux
-    
-    # Intel SYCL specific flags
-    export CGO_CFLAGS="-I${intel-compute-runtime}/include -I${level-zero}/include"
-    export CGO_LDFLAGS="-L${intel-compute-runtime}/lib -L${level-zero}/lib -lOpenCL -lze_loader"
-    
-    go build -buildmode=pie -trimpath -mod=readonly -modcacherw -ldflags "-s -w -X=github.com/ollama/ollama/version.Version=${version} -X=github.com/ollama/ollama/server.mode=release" .
-    
+    make -j$NIX_BUILD_CORES
     runHook postBuild
   '';
 
   installPhase = ''
-    runHook preInstall
-    
     install -D ollama $out/bin/ollama
-    
-    # Install Intel SYCL libraries
-    mkdir -p $out/lib
-    cp -r ${llamacppSycl}/lib/* $out/lib/ || true
-    
-    runHook postInstall
+    mkdir -p $out/lib/ollama
+    cp -r llama/build/linux-*/runners/* $out/lib/ollama/ 2>/dev/null || true
   '';
 
-  ldflags = [
-    "-s"
-    "-w"
-    "-X=github.com/ollama/ollama/version.Version=${version}"
-    "-X=github.com/ollama/ollama/server.mode=release"
-  ];
-
-  passthru = {
-    tests = {
-      inherit (nixosTests) ollama;
-      version = testers.testVersion {
-        package = ollama;
-        command = "ollama --version";
-      };
-    };
-  };
-
-  meta = with lib; {
-    description = "Get up and running with large language models locally with Intel IPEX/SYCL acceleration";
+  meta = {
+    description = "Ollama with Intel MKL + OpenCL acceleration";
     homepage = "https://github.com/ollama/ollama";
-    changelog = "https://github.com/ollama/ollama/releases/tag/v${version}";
-    license = licenses.mit;
-    platforms = platforms.unix;
+    license = lib.licenses.mit;
     mainProgram = "ollama";
-    maintainers = with maintainers; [ abysssol dit7ya elohmeier ];
   };
 }

@@ -1,10 +1,10 @@
 {
-  description = "Intel IPEX Integration for NixOS with KubeVirt GPU Workloads";
+  description = "Intel XPU Integration for NixOS with Native PyTorch 2.8+ Support";
 
   inputs = {
     nixpkgs             = { url = "github:nixos/nixpkgs/nixos-unstable"; };
     nixpkgs-unstable    = { url = "github:nixos/nixpkgs/nixos-unstable"; };
-    nixpkgs-stable      = { url = "github:nixos/nixpkgs/nixos-25.05"; };
+    nixpkgs-stable      = { url = "github:nixos/nixpkgs/nixos-24.11"; };
     home-manager        = { url = "github:nix-community/home-manager/master"; };
     anyrun              = { url = "github:Kirottu/anyrun"; };
     ags                 = { url = "github:Aylur/ags"; };
@@ -53,51 +53,54 @@
     };
   in
   {
-    # Intel XPU overlay for IPEX integration
+    # Intel XPU overlay for mainline PyTorch integration
     overlays.intel-xpu = final: prev: {
       # Kernel 6.18rc4 with native xe SR-IOV support
       inherit (import ./overlays/kernel.nix final prev) linux_6_18_rc4 linuxPackages_6_18_rc4;
       
       intel-xpu = {
-        # Core IPEX components from MordragT
+        # Core Intel components from MordragT
         python = mordrag-nixos.packages.${final.system}.intel-python;
         mkl = mordrag-nixos.packages.${final.system}.intel-mkl;
         
-        # Our applications with Intel IPEX support
-        comfyui = final.comfyui-ipex;
-        ollama = final.ollama-ipex;  # Now enabled with fixed Go version
+        # Our applications with native PyTorch XPU support
+        comfyui = final.comfyui-xpu;
+        ollama = final.ollama-xpu;
       };
       
-      # Direct access to our packages
-      comfyui-ipex = final.callPackage ./packages/comfyui-ipex {
-        inherit (final) ipex-llm intel-mkl intel-tbb intel-dpcpp;
+      # Applications using nixpkgs PyTorch with Intel optimizations
+      comfyui-xpu = final.callPackage ./packages/comfyui-ipex {
+        pytorch = final.python3Packages.torch;
+        inherit (final) intel-mkl intel-tbb intel-dpcpp;
+        comfyui-frontend-package = final.comfyui-frontend-package;
       };
-      ollama-ipex = final.callPackage ./packages/ollama-ipex {};  # Add our fixed Ollama
+      
+      # ComfyUI frontend package
+      comfyui-frontend-package = final.callPackage ./packages/comfyui-frontend.nix { };
+      ollama-xpu = final.callPackage ./packages/ollama-ipex {
+        inherit (final) intel-mkl;
+      };
       ipex-benchmarks = final.callPackage ./packages/benchmarks {};
       
-      # Add MordragT's Intel packages to system pkgs (prefer OneAPI versions)
+      # Add MordragT's Intel packages to system pkgs
       intel-mkl = mordrag-nixos.packages.${final.system}.intel-mkl;
-      intel-tbb = mordrag-nixos.packages.${final.system}.intel-tbb;  # Use regular intel-tbb (has vars.sh)
+      intel-tbb = mordrag-nixos.packages.${final.system}.intel-tbb;
       intel-dpcpp = mordrag-nixos.packages.${final.system}.intel-dpcpp;
       intel-dnnl = mordrag-nixos.packages.${final.system}.intel-dnnl;
       intel-sycl = mordrag-nixos.packages.${final.system}.intel-sycl;
-      
-      # Our custom packages
-      ipex-llm = final.callPackage ./packages/ipex-llm.nix { 
-        inherit (final) intel-mkl intel-tbb intel-dpcpp intel-dnnl jemalloc gperftools;
-      };
     };
 
-    # NixOS modules for IPEX integration
+    # NixOS modules for Intel XPU integration
     nixosModules = {
-      ipex = import ./modules/nixos/ipex.nix;
-      comfyui-ipex = import ./modules/nixos/comfyui-ipex.nix;
+      intel-xpu = import ./modules/nixos/ipex.nix;
+      comfyui-xpu = import ./modules/nixos/comfyui-ipex.nix;
+      comfyui-user = import ./modules/nixos/comfyui-user.nix;
       xe-sriov = import ./modules/nixos/xe-sriov.nix;
     };
 
     # Home Manager modules
     homeManagerModules = {
-      ipex = import ./modules/home-manager/ipex.nix;
+      intel-xpu = import ./modules/home-manager/ipex.nix;
     };
 
     # Package outputs
@@ -106,30 +109,24 @@
       python-ipex = mordrag-nixos.packages.x86_64-linux.intel-python;
       intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
       
-      # Our custom packages
-      comfyui-ipex = pkgs.callPackage ./packages/comfyui-ipex {
-        ipex-llm = self.packages.x86_64-linux.ipex-llm;
+      # Our custom packages using nixpkgs PyTorch with Intel optimizations
+      comfyui-xpu = pkgs.callPackage ./packages/comfyui-ipex {
+        pytorch = pkgs.python3Packages.torch;
         intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
         intel-tbb = mordrag-nixos.packages.x86_64-linux.intel-tbb;
         intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
+        comfyui-frontend-package = self.packages.x86_64-linux.comfyui-frontend-package;
       };
-      ollama-ipex = pkgs.callPackage ./packages/ollama-ipex {};
-      # comfyui-controlnet-aux = pkgs.python3Packages.callPackage ./packages/comfyui-nodes/controlnet-aux {};
-      # comfyui-upscaling = pkgs.python3Packages.callPackage ./packages/comfyui-nodes/upscaling {};
+      
+      # ComfyUI frontend package
+      comfyui-frontend-package = pkgs.callPackage ./packages/comfyui-frontend.nix { };
+      ollama-xpu = pkgs.callPackage ./packages/ollama-ipex {
+        intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
+      };
       
       # Benchmarking and testing tools
       ipex-benchmarks = pkgs.callPackage ./packages/benchmarks {
         intel-xpu = pkgs.intel-xpu;
-      };
-      
-      # Intel IPEX-LLM (proper Nix derivation from source)
-      ipex-llm = pkgs.callPackage ./packages/ipex-llm.nix { 
-        intel-mkl = mordrag-nixos.packages.x86_64-linux.intel-mkl;
-        intel-tbb = mordrag-nixos.packages.x86_64-linux.intel-tbb;
-        intel-dpcpp = mordrag-nixos.packages.x86_64-linux.intel-dpcpp;
-        intel-dnnl = mordrag-nixos.packages.x86_64-linux.intel-dnnl;
-        jemalloc = pkgs.jemalloc;
-        gperftools = pkgs.gperftools;
       };
     };
 
@@ -175,9 +172,10 @@
           # Native xe SR-IOV support (replaces i915-sriov experimental driver)
           self.nixosModules.xe-sriov
           
-          # ADD: Intel IPEX integration
-          self.nixosModules.ipex
-          self.nixosModules.comfyui-ipex
+          # Intel XPU integration with mainline PyTorch 2.8+
+          self.nixosModules.intel-xpu
+          self.nixosModules.comfyui-xpu
+          self.nixosModules.comfyui-user
           
           # Home Manager
           home-manager.nixosModules.home-manager
@@ -201,25 +199,28 @@
         # Development tools
         git
         nix-prefetch-github
+        nodejs
         
         # Intel GPU tools
         intel-gpu-tools
         libva-utils
         
         # Our packages for testing
-        self.packages.x86_64-linux.comfyui-ipex
+        self.packages.x86_64-linux.comfyui-xpu
         self.packages.x86_64-linux.ipex-benchmarks
       ];
       
       shellHook = ''
-        echo "🚀 Intel IPEX Development Environment"
+        echo "🚀 Intel XPU Development Environment (Simplified PyTorch)"
         echo "Available packages:"
-        echo "  - comfyui-ipex: ComfyUI with Intel XPU support"
+        echo "  - comfyui-xpu: ComfyUI with nixpkgs PyTorch + Intel libraries"
         echo "  - ipex-benchmarks: Performance testing suite"
         echo ""
         echo "Intel GPU tools:"
         echo "  - intel_gpu_top: GPU monitoring"
         echo "  - vainfo: GPU capabilities"
+        echo ""
+        echo "Note: Using standard nixpkgs PyTorch with Intel MKL libraries"
       '';
     };
   };

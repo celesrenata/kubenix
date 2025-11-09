@@ -180,6 +180,7 @@ let
 
     # Development
     amazon-q-cli
+    nodejs
     # MicroTex Deps
     tinyxml-2
     gtkmm3

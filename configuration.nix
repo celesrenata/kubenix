@@ -9,6 +9,12 @@
       ./hardware-configuration.nix
     ];
 
+  # Allow unfree and insecure packages
+  nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.permittedInsecurePackages = [
+    "openssl-1.1.1w"
+  ];
+
   # Enable Flakes.
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
@@ -104,11 +110,20 @@
         source ${pkgs.intel-tbb.out}/env/vars.sh  
         source ${pkgs.intel-dpcpp.llvm}/env/vars.sh
         
-        # Make our properly built IPEX-LLM available
-        export PYTHONPATH="${pkgs.ipex-llm}/${pkgs.python3.sitePackages}:$PYTHONPATH"
+        # Intel XPU environment (mainline PyTorch approach)
+        export MKLROOT="${pkgs.intel-mkl}"
+        export LD_LIBRARY_PATH="${pkgs.intel-mkl}/lib:$LD_LIBRARY_PATH"
         
-        # Start standard Ollama with Intel IPEX environment
-        exec ${pkgs.ollama}/bin/ollama serve
+        # Add Intel GPU runtime libraries
+        export LD_LIBRARY_PATH="${pkgs.intel-compute-runtime}/lib:${pkgs.level-zero}/lib:/run/opengl-driver/lib:$LD_LIBRARY_PATH"
+        
+        # Create symlink for Intel GPU library (Ollama expects libze_intel_gpu.so)
+        mkdir -p /tmp/ollama-gpu-libs
+        ln -sf /run/opengl-driver/lib/libze_intel_gpu.so.1 /tmp/ollama-gpu-libs/libze_intel_gpu.so
+        export LD_LIBRARY_PATH="/tmp/ollama-gpu-libs:$LD_LIBRARY_PATH"
+        
+        # Start Ollama-XPU with Intel acceleration
+        exec ${pkgs.ollama-xpu}/bin/ollama serve
       '';
       Restart = "always";
       RestartSec = "3";
@@ -119,6 +134,9 @@
   
   # Open firewall for Ollama
   networking.firewall.allowedTCPPorts = [ 11434 ];
+  
+  # Enable ComfyUI user service
+  services.comfyui-user.enable = true;
   #time.timeZone = "America/Los_Angeles";
 
   # Select internationalisation properties.
@@ -446,10 +464,15 @@
     nil
     foot
     
-    # ADD: Intel IPEX packages for GPU workloads
-    comfyui-ipex      # ComfyUI with Intel XPU support
-    ollama-sycl       # MordragT's Ollama with Intel SYCL (Go version fixed)
-    ipex-benchmarks   # Performance testing suite
+    # Intel GPU support
+    intel-compute-runtime
+    level-zero
+    intel-gpu-tools
+    
+    # Intel XPU packages for GPU workloads (updated for mainline PyTorch)
+    comfyui-xpu      # ComfyUI with Intel-optimized PyTorch
+    ollama-xpu       # Ollama with Intel optimizations
+    ipex-benchmarks  # Performance testing suite
     kitty
     pulseaudio
     xdg-desktop-portal-hyprland

@@ -1,20 +1,21 @@
 { lib
-, python3Packages  # Use Python 3.13 to match our IPEX-LLM package
+, python312Packages
 , fetchFromGitHub
-, ipex-llm  # Use our properly built IPEX-LLM package
+, pytorch  # Use PyTorch with Intel optimizations
 , makeWrapper
 , writeText
 , writeShellScript
 , intel-mkl
 , intel-tbb
 , intel-dpcpp
+, comfyui-frontend-package
 }:
 
 let
-  # ComfyUI version - ACTUAL latest from GitHub with built-in Intel XPU support!
-  version = "0.3.47";
+  # ComfyUI version - Latest with Intel XPU support
+  version = "0.3.67";
 
-in python3Packages.buildPythonApplication rec {
+in python312Packages.buildPythonApplication rec {
   pname = "comfyui-ipex";
   inherit version;
   format = "other";
@@ -23,14 +24,14 @@ in python3Packages.buildPythonApplication rec {
     owner = "comfyanonymous";
     repo = "ComfyUI";
     rev = "v${version}";
-    hash = "sha256-Kcw91IC1yPzn2NeBLTUyJ2AdFkTdE9v8j6iabK/f7JY=";
+    hash = "sha256-/zfs6HqhpgsblG4MgDPN9ZGz5abwHNkHrGq3uX/f6pQ=";
   };
 
   nativeBuildInputs = [
     makeWrapper
   ];
 
-  propagatedBuildInputs = with python3Packages; [
+  propagatedBuildInputs = with python312Packages; [
     # Core ComfyUI dependencies
     pillow
     pyyaml
@@ -48,17 +49,25 @@ in python3Packages.buildPythonApplication rec {
     transformers
     tokenizers
     
-    # PyTorch (standard version - IPEX-LLM will provide Intel optimizations)
+    # Additional dependencies for k_diffusion
+    torchsde
+    
+    # Video processing support (new in v0.3.67)
+    av
+    
+    # ComfyUI frontend package (required for v0.3.67+)
+    comfyui-frontend-package
+    
+    # PyTorch with Intel optimizations (use Python 3.12 compatible version)
     torch
     torchvision
     torchaudio
-    
-    # Our properly built IPEX-LLM package for Intel acceleration
-    ipex-llm
   ];
 
-  # No patches needed - ComfyUI v0.3.47 has Intel XPU support built-in!
-  patches = [ ];
+  # Patch ComfyUI to handle missing CUDA gracefully
+  patches = [ 
+    ./fix-cuda-detection.patch
+  ];
 
   # Don't run setup.py - ComfyUI doesn't have one
   dontBuild = true;
@@ -94,15 +103,14 @@ export COMFYUI_PATH="$out/lib/comfyui"
 
 # Usage information
 if [[ "\$1" == "--help-gpu" ]]; then
-    echo "ComfyUI v0.3.47 with Intel IPEX-LLM acceleration"
+    echo "ComfyUI v0.3.47 with Intel-optimized PyTorch"
     echo ""
-    echo "🎉 Using our properly built IPEX-LLM package from source!"
+    echo "🚀 Using PyTorch with Intel MKL optimizations!"
     echo ""
     echo "GPU Selection Options:"
     echo "  (default)                    - Auto-detect: Intel XPU > CUDA > CPU"
     echo "  --cpu                        - Force CPU only"
     echo "  --oneapi-device-selector S   - Select specific Intel device"
-    echo "  --disable-ipex-optimize      - Disable Intel IPEX optimizations"
     echo ""
     echo "Intel XPU Specific:"
     echo "  --oneapi-device-selector 'opencl:*'     # All OpenCL devices"
@@ -114,11 +122,6 @@ if [[ "\$1" == "--help-gpu" ]]; then
     echo "  comfyui-ipex --oneapi-device-selector 'opencl:0' # Force Intel GPU 0"
     echo "  comfyui-cuda                                    # Force NVIDIA CUDA"
     echo "  comfyui-xpu                                     # Intel XPU optimized"
-    echo ""
-    echo "Environment Variables:"
-    echo "  ZES_ENABLE_SYSMAN=1          # Enable Intel GPU system management"
-    echo "  ONEAPI_DEVICE_SELECTOR       # Intel device selection"
-    echo "  CUDA_VISIBLE_DEVICES         # NVIDIA device selection"
     echo ""
     exit 0
 fi
@@ -173,8 +176,8 @@ EOF
     mkdir -p $out/share/applications
     cat > $out/share/applications/comfyui-ipex.desktop << 'EOF'
 [Desktop Entry]
-Name=ComfyUI (Intel IPEX-LLM)
-Comment=Stable Diffusion GUI with Intel IPEX-LLM acceleration
+Name=ComfyUI (Intel Optimized)
+Comment=Stable Diffusion GUI with Intel-optimized PyTorch
 Exec=comfyui-ipex --listen 0.0.0.0
 Icon=applications-graphics
 Terminal=false
@@ -185,12 +188,12 @@ EOF
     runHook postInstall
   '';
 
-  # Wrap the Python environment with Intel GPU support and our IPEX-LLM
+  # Wrap the Python environment with Intel GPU support
   postFixup = ''
     # Source Intel OneAPI environment for all wrappers
     for wrapper in $out/bin/comfyui-*; do
       wrapProgram "$wrapper" \
-        --prefix PYTHONPATH : "$out/lib/comfyui:${ipex-llm}/${python3Packages.python.sitePackages}:$PYTHONPATH" \
+        --prefix PYTHONPATH : "$out/lib/comfyui:${pytorch}/${python312Packages.python.sitePackages}:$PYTHONPATH" \
         --prefix PATH : "${intel-mkl.out}/bin:${intel-tbb.out}/bin:${intel-dpcpp.llvm}/bin" \
         --set MKLROOT "${intel-mkl.out}" \
         --set TBBROOT "${intel-tbb.out}" \
@@ -219,19 +222,19 @@ EOF
   '';
 
   meta = with lib; {
-    description = "ComfyUI v0.3.47 with Intel IPEX-LLM acceleration (built from source)";
+    description = "ComfyUI v0.3.47 with Intel-optimized PyTorch";
     longDescription = ''
-      ComfyUI with Intel IPEX-LLM acceleration using our properly built package.
+      ComfyUI with Intel-optimized PyTorch using MKL and Intel GPU support.
       
-      🎉 Features:
-      - ComfyUI v0.3.47 with native Intel XPU support
-      - Intel IPEX-LLM package built from source (no binary copying!)
+      🚀 Features:
+      - ComfyUI v0.3.47 with Intel GPU support
+      - PyTorch with Intel MKL optimizations
       - Proper Intel OneAPI environment integration
       - Multiple GPU backends: Intel XPU, NVIDIA CUDA, CPU
       - Four optimized binaries for different use cases
       
       Binaries:
-      - comfyui-ipex: Auto-detect best GPU with Intel IPEX-LLM
+      - comfyui-ipex: Auto-detect best GPU with Intel optimizations
       - comfyui-cuda: Force NVIDIA CUDA usage
       - comfyui-xpu: Intel XPU optimized with OpenCL
       - comfyui-xpu-l0: Intel XPU with Level Zero driver
