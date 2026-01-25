@@ -181,6 +181,7 @@
             (import ./overlays/ibus-fix.nix)
             (import ./overlays/arrow-fix.nix)
             (import ./overlays/xfce4-notifyd-fix.nix)
+            (import ./overlays/nodejs-fix.nix)
           ]; }
           
           # Original kubenix system configuration (without K3s)
