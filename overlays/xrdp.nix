@@ -1,7 +1,9 @@
 final: prev:
 {
   # Override xrdp with newer version and DRM support, using our custom xorgxrdp-glamor
-  xrdp = prev.xrdp.overrideAttrs (oldAttrs: {
+  xrdp = (prev.xrdp.override {
+    openssl = prev.openssl_3;
+  }).overrideAttrs (oldAttrs: {
     version = "0.10.4.1";
     
     src = prev.fetchFromGitHub {

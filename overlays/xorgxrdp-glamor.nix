@@ -2,7 +2,7 @@ final: prev:
 let
   glamorPatch = prev.fetchurl {
     url = "https://aur.archlinux.org/cgit/aur.git/plain/glamor.patch?h=xorgxrdp-glamor";
-    sha256 = "sha256-CqCye2YSIhe9bKJGZJb+O+hzjE3r4kf5r3/aoISHYi4=";
+    sha256 = "0bk2hy2a1nkzmzwlgqpb9n677s1vzsb68im2djyif8hjcrxv580a";
   };
 in
 {
@@ -220,7 +220,9 @@ EOF
   };
 
   # Override xrdp to use our custom xorgxrdp package with Intel Arc glamor support
-  xrdp = prev.xrdp.overrideAttrs (oldAttrs: {
+  xrdp = (prev.xrdp.override {
+    openssl = prev.openssl_3;
+  }).overrideAttrs (oldAttrs: {
     # Force rebuild by changing version
     version = "${oldAttrs.version}-intel-arc-glamor";
     __intentionallyOverridingVersion = true;

@@ -356,11 +356,11 @@
     networkmanagerapplet
     nix-index
     mlocate
-    barrier
+    input-leap
     openssl
     simple-scan
     btop
-    thefuck
+    pay-respects
     waypipe
     nh
 
@@ -504,6 +504,6 @@
   hardware.steam-hardware.enable = true;
 
   # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
-  system.stateVersion = "24.11"; # Did you read the comment?
+  system.stateVersion = "25.11"; # Did you read the comment?
 }
 

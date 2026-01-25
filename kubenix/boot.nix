@@ -17,7 +17,7 @@
   boot.initrd.kernelModules = [ "vmd" "md_mod" "raid0" "xe" ];
   
   # Use kernel 6.18-rc4 from overlay
-  boot.kernelPackages = pkgs.linuxPackages_6_18_rc4;
+  boot.kernelPackages = pkgs.linuxPackages_6_18;
   boot.kernelModules = [ "xe" "vfio" "vfio_pci" "vfio_iommu_type1" ];
   boot.supportedFilesystems = [ "nfs" ]; 
 
