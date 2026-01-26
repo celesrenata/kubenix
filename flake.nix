@@ -196,8 +196,6 @@
           ./kubenix/remote-build.nix
           ./kubenix/xrdp-drm.nix
           
-          # Native xe SR-IOV support (replaces i915-sriov experimental driver)
-          self.nixosModules.xe-sriov
           
           # Intel XPU integration with mainline PyTorch 2.8+
           self.nixosModules.intel-xpu

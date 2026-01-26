@@ -127,7 +127,7 @@ Section "Device"
     Driver "xrdpdev"
     Option "DRMDevice" "/dev/dri/renderD128"
     Option "DRI3" "1"
-    Option "DRMAllowList" "amdgpu i915 msm radeon xe"
+    Option "DRMAllowList" "amdgpu xe msm radeon xe"
 EndSection
 
 Section "Screen"
