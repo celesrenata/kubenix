@@ -78,8 +78,6 @@
       #   });
       # };
       
-      # Kernel 6.18 with native xe SR-IOV support
-      inherit (import ./overlays/kernel.nix final prev) linux_6_18 linuxPackages_6_18;
       
       intel-xpu = {
         # Core Intel components from MordragT
