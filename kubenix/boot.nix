@@ -27,8 +27,10 @@
     "iommu=pt"
     "xe.enable_guc=3"
     "xe.force_probe=7d55"
+    "module_blacklist=i915"
     "boot.shell_on_fail"
   ];
   
   boot.initrd.availableKernelModules = [ "xe" ];
+  boot.blacklistedKernelModules = [ "i915" ];
 }
