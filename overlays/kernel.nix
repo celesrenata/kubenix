@@ -1,6 +1,6 @@
 final: prev: {
   linux_6_18 = prev.linux_6_18.override {
-    kernelPatches = (prev.linux_6_18.kernelPatches or []) ++ [
+    kernelPatches = [
       {
         name = "xe-mtl-sriov";
         patch = ../mtl-sriov.patch;
